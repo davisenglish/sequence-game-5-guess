@@ -507,7 +507,7 @@ export default function WordPuzzleGame() {
         {!roundStarted && (
           <>
             <img 
-              src="/letter-game-logo2.png" 
+              src={process.env.PUBLIC_URL + "/letter-game-logo2.png"} 
               alt="Sequence Game Logo" 
               className="w-24 h-24 mb-4 object-contain"
               onError={(e) => {
