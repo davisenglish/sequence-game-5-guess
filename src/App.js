@@ -3,7 +3,7 @@
 // Drop this file into your React project and import/use <WordPuzzleGame />
 import React, { useState, useEffect, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faStopwatch, faCircleInfo, faChartSimple, faCheckCircle, faTimesCircle, faCircleQuestion } from '@fortawesome/free-solid-svg-icons';
+import { faStopwatch, faCircleInfo, faChartSimple, faCheckCircle, faTimesCircle, faCircleQuestion, faHouseChimney } from '@fortawesome/free-solid-svg-icons';
 import words from 'an-array-of-english-words';
 
 const GUESSES_PER_DAY = 5;
@@ -525,6 +525,13 @@ export default function WordPuzzleGame() {
         )}
         {roundStarted && (
           <div className="flex items-center space-x-3">
+            <a 
+              href="https://davisenglish.github.io/sequence-game-home/"
+              className="text-gray-600 hover:text-gray-800 transition-colors"
+              title="Home"
+            >
+              <FontAwesomeIcon icon={faHouseChimney} className="text-lg" />
+            </a>
             <button 
               onClick={() => setShowStats(true)}
               className="text-gray-600 hover:text-gray-800 transition-colors"
@@ -561,8 +568,15 @@ export default function WordPuzzleGame() {
 
       {!roundStarted ? (
         <div className="flex flex-col items-center space-y-3">
-        <button onClick={handleBegin} className="bg-white border border-gray-400 text-black w-52 h-16 text-xl font-semibold rounded">BEGIN</button>
+        <button onClick={handleBegin} className="bg-white border border-gray-400 text-black w-52 h-16 text-xl font-semibold rounded">BEGIN : 5-GUESS</button>
           <div className="flex flex-row items-center space-x-4">
+            <a 
+              href="https://davisenglish.github.io/sequence-game-home/"
+              className="text-gray-600 hover:text-gray-800 transition-colors"
+              title="Home"
+            >
+              <FontAwesomeIcon icon={faHouseChimney} className="text-lg" />
+            </a>
             <button onClick={() => setShowStats(true)} className="text-gray-600 hover:text-gray-800 transition-colors" title="Statistics">
               <FontAwesomeIcon icon={faChartSimple} className="text-lg" />
             </button>
