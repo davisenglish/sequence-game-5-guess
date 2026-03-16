@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/sequence-game-5-guess/static/css/main.1bca6771.css",
-    "main.js": "/sequence-game-5-guess/static/js/main.6b2640ec.js",
+    "main.js": "/sequence-game-5-guess/static/js/main.2d31c457.js",
     "static/js/453.96453769.chunk.js": "/sequence-game-5-guess/static/js/453.96453769.chunk.js",
     "index.html": "/sequence-game-5-guess/index.html",
     "main.1bca6771.css.map": "/sequence-game-5-guess/static/css/main.1bca6771.css.map",
-    "main.6b2640ec.js.map": "/sequence-game-5-guess/static/js/main.6b2640ec.js.map",
+    "main.2d31c457.js.map": "/sequence-game-5-guess/static/js/main.2d31c457.js.map",
     "453.96453769.chunk.js.map": "/sequence-game-5-guess/static/js/453.96453769.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.1bca6771.css",
-    "static/js/main.6b2640ec.js"
+    "static/js/main.2d31c457.js"
   ]
 }
