@@ -786,10 +786,6 @@ export default function WordPuzzleGame() {
       setErrorMessage('Letters only, please');
       return;
     }
-    const now = Date.now();
-    if (lastKeyPressRef.current.key === letter && now - lastKeyPressRef.current.time < 100) return;
-    lastKeyPressRef.current = { key: letter, time: now };
-
     const inputEl = inputRef.current;
     if (inputEl) {
       if (document.activeElement !== inputEl) inputEl.focus();
@@ -1449,6 +1445,13 @@ export default function WordPuzzleGame() {
         const submitWidth = bottomKeysTotalWidth + (bottomLettersCount - 1) * gapPx;
         const specialHeight = letterH;
 
+        // Apple-style popup: 20% larger than key, 4px above, connected by stem
+        const popupScale = 1.2;
+        const popupW = Math.round(letterW * popupScale);
+        const popupH = Math.round(letterH * popupScale);
+        const popupGap = 4;
+        const keyBg = '#e5e7eb'; // gray-200
+
         // Helper to map a horizontal position to the nearest key in a row
         const findNearestIndexByCenters = (x, widths, gap) => {
           let cursor = 0;
@@ -1482,8 +1485,6 @@ export default function WordPuzzleGame() {
           event.stopPropagation();
 
           setPressedKey(letter);
-          setTimeout(() => setPressedKey(null), 120);
-
           const useCapital = mobileShiftActiveRef.current;
           handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
           if (useCapital && !mobileCapsLockRef.current) {
@@ -1491,6 +1492,10 @@ export default function WordPuzzleGame() {
             setMobileShiftActive(false);
           }
           refocusInputSoon();
+        };
+
+        const handleTopRowPointerUpOrCancel = () => {
+          setPressedKey(null);
         };
 
         const handleMiddleRowBackgroundPointerDown = (event) => {
@@ -1509,8 +1514,6 @@ export default function WordPuzzleGame() {
           event.stopPropagation();
 
           setPressedKey(letter);
-          setTimeout(() => setPressedKey(null), 120);
-
           const useCapital = mobileShiftActiveRef.current;
           handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
           if (useCapital && !mobileCapsLockRef.current) {
@@ -1518,6 +1521,10 @@ export default function WordPuzzleGame() {
             setMobileShiftActive(false);
           }
           refocusInputSoon();
+        };
+
+        const handleMiddleRowPointerUpOrCancel = () => {
+          setPressedKey(null);
         };
 
         const handleBottomRowBackgroundPointerDown = (event) => {
@@ -1561,7 +1568,6 @@ export default function WordPuzzleGame() {
           if (key.type === 'letter') {
             const letter = key.value;
             setPressedKey(letter);
-            setTimeout(() => setPressedKey(null), 120);
             const useCapital = mobileShiftActiveRef.current;
             handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
             if (useCapital && !mobileCapsLockRef.current) {
@@ -1571,7 +1577,6 @@ export default function WordPuzzleGame() {
             refocusInputSoon();
           } else if (key.type === 'shift') {
             setPressedKey('shift');
-            setTimeout(() => setPressedKey(null), 120);
             const now = Date.now();
             if (!mobileShiftActive) {
               mobileShiftActiveRef.current = true;
@@ -1596,7 +1601,6 @@ export default function WordPuzzleGame() {
             refocusInputSoon();
           } else if (key.type === 'backspace') {
             setPressedKey('backspace');
-            setTimeout(() => setPressedKey(null), 120);
             handleKeyboardBackspace();
             refocusInputSoon();
           }
@@ -1624,9 +1628,11 @@ export default function WordPuzzleGame() {
               className="flex justify-center relative flex-nowrap"
               style={{ gap: gapPx, marginBottom: rowGapPx }}
               onPointerDown={handleTopRowBackgroundPointerDown}
+              onPointerUp={handleTopRowPointerUpOrCancel}
+              onPointerCancel={handleTopRowPointerUpOrCancel}
             >
               {['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'].map((letter) => (
-                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0 }}>
+                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0, overflow: 'visible' }}>
                   <button
                     type="button"
                     onPointerDown={(e) => {
@@ -1642,7 +1648,7 @@ export default function WordPuzzleGame() {
                     }}
                     onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                    className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
                     style={{
                       touchAction: 'manipulation',
@@ -1658,14 +1664,52 @@ export default function WordPuzzleGame() {
                       justifyContent: 'center',
                       minHeight: letterH,
                       position: 'relative',
-                      zIndex: pressedKey === letter ? 10 : 2,
-                      transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)',
-                      transition: 'transform 0.1s ease-out',
-                      backgroundColor: pressedKey === letter ? 'rgb(156, 163, 175)' : undefined, // match active:bg-gray-400
+                      zIndex: 2,
+                      pointerEvents: 'auto',
                     }}
                   >
-                    {letter}
+                    {pressedKey === letter ? '' : letter}
                   </button>
+                  {pressedKey === letter && (
+                    <>
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          bottom: '100%',
+                          height: popupGap,
+                          backgroundColor: keyBg,
+                          borderTopLeftRadius: 6,
+                          borderTopRightRadius: 6,
+                          zIndex: 10,
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          marginLeft: -popupW / 2,
+                          bottom: `calc(100% + ${popupGap}px)`,
+                          width: popupW,
+                          height: popupH,
+                          backgroundColor: keyBg,
+                          borderRadius: 8,
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '1.2em',
+                          fontWeight: 600,
+                          color: '#1f2937',
+                          zIndex: 10,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        {letter}
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -1674,9 +1718,11 @@ export default function WordPuzzleGame() {
               className="flex justify-center relative flex-nowrap"
               style={{ gap: gapPx, marginBottom: rowGapPx }}
               onPointerDown={handleMiddleRowBackgroundPointerDown}
+              onPointerUp={handleMiddleRowPointerUpOrCancel}
+              onPointerCancel={handleMiddleRowPointerUpOrCancel}
             >
               {['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'].map((letter) => (
-                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0 }}>
+                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0, overflow: 'visible' }}>
                   <button
                     type="button"
                     onPointerDown={(e) => {
@@ -1692,7 +1738,7 @@ export default function WordPuzzleGame() {
                     }}
                     onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                    className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
                     style={{
                       touchAction: 'manipulation',
@@ -1708,14 +1754,52 @@ export default function WordPuzzleGame() {
                       justifyContent: 'center',
                       minHeight: letterH,
                       position: 'relative',
-                      zIndex: pressedKey === letter ? 10 : 2,
-                      transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)',
-                      transition: 'transform 0.1s ease-out',
-                      backgroundColor: pressedKey === letter ? 'rgb(156, 163, 175)' : undefined,
+                      zIndex: 2,
+                      pointerEvents: 'auto',
                     }}
                   >
-                    {letter}
+                    {pressedKey === letter ? '' : letter}
                   </button>
+                  {pressedKey === letter && (
+                    <>
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          bottom: '100%',
+                          height: popupGap,
+                          backgroundColor: keyBg,
+                          borderTopLeftRadius: 6,
+                          borderTopRightRadius: 6,
+                          zIndex: 10,
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          marginLeft: -popupW / 2,
+                          bottom: `calc(100% + ${popupGap}px)`,
+                          width: popupW,
+                          height: popupH,
+                          backgroundColor: keyBg,
+                          borderRadius: 8,
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '1.2em',
+                          fontWeight: 600,
+                          color: '#1f2937',
+                          zIndex: 10,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        {letter}
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -1724,6 +1808,8 @@ export default function WordPuzzleGame() {
               className="flex justify-center relative flex-nowrap"
               style={{ gap: gapPx, marginBottom: rowGapPx }}
               onPointerDown={handleBottomRowBackgroundPointerDown}
+              onPointerUp={handleMiddleRowPointerUpOrCancel}
+              onPointerCancel={handleMiddleRowPointerUpOrCancel}
             >
               <div style={{ position: 'relative', width: specialWidth, height: specialHeight, flexShrink: 0 }}>
                 <button
@@ -1793,7 +1879,7 @@ export default function WordPuzzleGame() {
                 </button>
               </div>
               {['Z', 'X', 'C', 'V', 'B', 'N', 'M'].map((letter) => (
-                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0 }}>
+                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0, overflow: 'visible' }}>
                   <button
                     type="button"
                     onPointerDown={(e) => {
@@ -1809,7 +1895,7 @@ export default function WordPuzzleGame() {
                     }}
                     onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                    className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
                     style={{
                       touchAction: 'manipulation',
@@ -1825,14 +1911,52 @@ export default function WordPuzzleGame() {
                       justifyContent: 'center',
                       minHeight: letterH,
                       position: 'relative',
-                      zIndex: pressedKey === letter ? 10 : 2,
-                      transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)',
-                      transition: 'transform 0.1s ease-out',
-                      backgroundColor: pressedKey === letter ? 'rgb(156, 163, 175)' : undefined,
+                      zIndex: 2,
+                      pointerEvents: 'auto',
                     }}
                   >
-                    {letter}
+                    {pressedKey === letter ? '' : letter}
                   </button>
+                  {pressedKey === letter && (
+                    <>
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          bottom: '100%',
+                          height: popupGap,
+                          backgroundColor: keyBg,
+                          borderTopLeftRadius: 6,
+                          borderTopRightRadius: 6,
+                          zIndex: 10,
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          marginLeft: -popupW / 2,
+                          bottom: `calc(100% + ${popupGap}px)`,
+                          width: popupW,
+                          height: popupH,
+                          backgroundColor: keyBg,
+                          borderRadius: 8,
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '1.2em',
+                          fontWeight: 600,
+                          color: '#1f2937',
+                          zIndex: 10,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        {letter}
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
               <div style={{ position: 'relative', width: specialWidth, height: specialHeight, flexShrink: 0 }}>
