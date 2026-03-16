@@ -230,6 +230,7 @@ export default function WordPuzzleGame() {
   const [hintReadyPop, setHintReadyPop] = useState(false);
   const [needsScrollForKeyboard, setNeedsScrollForKeyboard] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 375));
+  const [viewportHeight, setViewportHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 667));
   const [pressedKey, setPressedKey] = useState(null);
   const [mobileShiftActive, setMobileShiftActive] = useState(false);
   const [mobileCapsLock, setMobileCapsLock] = useState(false);
@@ -267,8 +268,10 @@ export default function WordPuzzleGame() {
     // Detect mobile/tablet (show virtual keyboard for phones and tablets) and track viewport for keyboard scaling
     const checkMobile = () => {
       const w = window.innerWidth;
+      const h = window.innerHeight;
       setIsMobile(w <= 1024);
       setViewportWidth(w);
+      setViewportHeight(h);
     };
     
     checkMobile();
@@ -1369,12 +1372,25 @@ export default function WordPuzzleGame() {
       {/* Virtual Keyboard - only on mobile; always fixed at bottom of screen; scales to viewport with 8px edge margin */}
       {isMobile && roundStarted && !gameOver && !showRules && (() => {
         const edgeMargin = 8;
-        const keyBaseWidth = 35;
-        const gapBase = 8;
+        // Make keys appear larger without increasing overall keyboard width:
+        // increase per-key base size and reduce the base gap so that
+        // the original design row width (422px) is preserved.
+        const originalKeyBaseWidth = 35;
+        const originalGapBase = 8;
         const keyCountTopRow = 10;
         const gapCountTopRow = keyCountTopRow - 1;
+        const originalDesignRowWidth =
+          keyCountTopRow * originalKeyBaseWidth + gapCountTopRow * originalGapBase; // 422
+
+        // New (larger) base key size
+        const keyBaseWidth = originalKeyBaseWidth + 3; // 38
+        const keyBaseHeight = 45 + 3; // 48
+        // Choose base gap so total row width stays the same as before
+        const gapBase =
+          (originalDesignRowWidth - keyCountTopRow * keyBaseWidth) / gapCountTopRow;
+
         const availableWidth = Math.max(0, viewportWidth - 2 * edgeMargin);
-        const designRowWidth = keyCountTopRow * keyBaseWidth + gapCountTopRow * gapBase; // 422
+        const designRowWidth = originalDesignRowWidth;
 
         // First compute scale assuming gaps scale linearly with keys
         let scale = availableWidth / designRowWidth;
@@ -1390,11 +1406,35 @@ export default function WordPuzzleGame() {
           gapPx = gapMax;
         }
 
-        // Final clamped / rounded gap
+        // Final clamped / rounded gap (horizontal spacing between keys)
         gapPx = Math.max(gapMin, Math.min(gapMax, Math.round(gapPx)));
 
+        // Vertical spacing between rows: 60% more than horizontal gap
+        const rowGapPx = Math.round(gapPx * 1.6);
+
         const letterW = Math.round(keyBaseWidth * scale);
-        const letterH = Math.min(60, Math.round(45 * scale));
+
+        const keyPadding = 4; // 20% less than 5
+        const containerPaddingH = 8; // 20% less than 23; matches edge margin
+        const containerPaddingB = 8;   // 20% less than 10
+
+        // Constrain overall keyboard height to at most 40% of viewport height, capped at 350px.
+        const maxKeyboardHeight =
+          typeof viewportHeight === 'number' && viewportHeight > 0
+            ? Math.min(viewportHeight * 0.4, 350)
+            : 350;
+        // Total non-key vertical space inside the keyboard container:
+        // top padding (8) + bottom padding (containerPaddingB) + 2 gaps between three rows.
+        const nonKeyVertical = 8 + containerPaddingB + 2 * rowGapPx;
+        // We have three key rows plus the Submit button row (which matches key height): 4 * letterH.
+        const maxLetterHeightFromContainer = Math.floor(
+          (maxKeyboardHeight - nonKeyVertical) / 4
+        );
+        const unconstrainedLetterH = Math.round(keyBaseHeight * scale);
+        const letterH = Math.max(
+          30,
+          Math.min(60, unconstrainedLetterH, maxLetterHeightFromContainer)
+        );
 
         // Make bottom row (Shift + Z-M + Backspace) span the same usable width
         // as the top row, so Shift/Backspace outer edges are also ~8px from viewport.
@@ -1407,10 +1447,160 @@ export default function WordPuzzleGame() {
           Math.round((availableWidth - bottomKeysTotalWidth - bottomGapsTotalWidth) / 2)
         );
         const submitWidth = bottomKeysTotalWidth + (bottomLettersCount - 1) * gapPx;
-        const specialHeight = Math.min(60, Math.round(45 * scale));
-        const keyPadding = 4; // 20% less than 5
-        const containerPaddingH = 8; // 20% less than 23; matches edge margin
-        const containerPaddingB = 8;   // 20% less than 10
+        const specialHeight = letterH;
+
+        // Helper to map a horizontal position to the nearest key in a row
+        const findNearestIndexByCenters = (x, widths, gap) => {
+          let cursor = 0;
+          let bestIndex = 0;
+          let bestDist = Infinity;
+          for (let i = 0; i < widths.length; i++) {
+            const center = cursor + widths[i] / 2;
+            const dist = Math.abs(x - center);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestIndex = i;
+            }
+            cursor += widths[i] + gap;
+          }
+          return bestIndex;
+        };
+
+        const handleTopRowBackgroundPointerDown = (event) => {
+          if (!roundStarted || gameOver) return;
+          const target = event.target;
+          if (target && target.closest && target.closest('button')) return;
+
+          const rect = event.currentTarget.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const letters = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
+          const widths = new Array(letters.length).fill(letterW);
+          const idx = findNearestIndexByCenters(x, widths, gapPx);
+          const letter = letters[idx] || letters[0];
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          setPressedKey(letter);
+          setTimeout(() => setPressedKey(null), 120);
+
+          const useCapital = mobileShiftActiveRef.current;
+          handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
+          if (useCapital && !mobileCapsLockRef.current) {
+            mobileShiftActiveRef.current = false;
+            setMobileShiftActive(false);
+          }
+          refocusInputSoon();
+        };
+
+        const handleMiddleRowBackgroundPointerDown = (event) => {
+          if (!roundStarted || gameOver) return;
+          const target = event.target;
+          if (target && target.closest && target.closest('button')) return;
+
+          const rect = event.currentTarget.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const letters = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'];
+          const widths = new Array(letters.length).fill(letterW);
+          const idx = findNearestIndexByCenters(x, widths, gapPx);
+          const letter = letters[idx] || letters[0];
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          setPressedKey(letter);
+          setTimeout(() => setPressedKey(null), 120);
+
+          const useCapital = mobileShiftActiveRef.current;
+          handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
+          if (useCapital && !mobileCapsLockRef.current) {
+            mobileShiftActiveRef.current = false;
+            setMobileShiftActive(false);
+          }
+          refocusInputSoon();
+        };
+
+        const handleBottomRowBackgroundPointerDown = (event) => {
+          if (!roundStarted || gameOver) return;
+          const target = event.target;
+          // Do not override actual button clicks, including Submit
+          if (target && target.closest && target.closest('button')) return;
+
+          const rect = event.currentTarget.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+
+          const keys = [
+            { type: 'shift' },
+            { type: 'letter', value: 'Z' },
+            { type: 'letter', value: 'X' },
+            { type: 'letter', value: 'C' },
+            { type: 'letter', value: 'V' },
+            { type: 'letter', value: 'B' },
+            { type: 'letter', value: 'N' },
+            { type: 'letter', value: 'M' },
+            { type: 'backspace' },
+          ];
+          const widths = [
+            specialWidth,
+            letterW,
+            letterW,
+            letterW,
+            letterW,
+            letterW,
+            letterW,
+            letterW,
+            specialWidth,
+          ];
+
+          const idx = findNearestIndexByCenters(x, widths, gapPx);
+          const key = keys[idx] || keys[0];
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (key.type === 'letter') {
+            const letter = key.value;
+            setPressedKey(letter);
+            setTimeout(() => setPressedKey(null), 120);
+            const useCapital = mobileShiftActiveRef.current;
+            handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
+            if (useCapital && !mobileCapsLockRef.current) {
+              mobileShiftActiveRef.current = false;
+              setMobileShiftActive(false);
+            }
+            refocusInputSoon();
+          } else if (key.type === 'shift') {
+            setPressedKey('shift');
+            setTimeout(() => setPressedKey(null), 120);
+            const now = Date.now();
+            if (!mobileShiftActive) {
+              mobileShiftActiveRef.current = true;
+              mobileCapsLockRef.current = false;
+              setMobileShiftActive(true);
+              setMobileCapsLock(false);
+              mobileShiftOnAtRef.current = now;
+            } else if (mobileCapsLock) {
+              mobileShiftActiveRef.current = false;
+              mobileCapsLockRef.current = false;
+              setMobileShiftActive(false);
+              setMobileCapsLock(false);
+            } else {
+              if (now - mobileShiftOnAtRef.current < 450) {
+                mobileCapsLockRef.current = true;
+                setMobileCapsLock(true);
+              } else {
+                mobileShiftActiveRef.current = false;
+                setMobileShiftActive(false);
+              }
+            }
+            refocusInputSoon();
+          } else if (key.type === 'backspace') {
+            setPressedKey('backspace');
+            setTimeout(() => setPressedKey(null), 120);
+            handleKeyboardBackspace();
+            refocusInputSoon();
+          }
+        };
         return (
         <>
           <div style={{ marginTop: 15, minHeight: 260 }} aria-hidden />
@@ -1430,7 +1620,11 @@ export default function WordPuzzleGame() {
               : { padding: '0 10px' }}
           >
             {/* Top row: Q-P — letter keys scale with viewport */}
-            <div className="flex justify-center relative flex-nowrap" style={{ gap: gapPx, marginBottom: gapPx }}>
+            <div
+              className="flex justify-center relative flex-nowrap"
+              style={{ gap: gapPx, marginBottom: rowGapPx }}
+              onPointerDown={handleTopRowBackgroundPointerDown}
+            >
               {['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'].map((letter) => (
                 <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0 }}>
                   <button
@@ -1450,7 +1644,25 @@ export default function WordPuzzleGame() {
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
-                    style={{ touchAction: 'manipulation', width: '100%', height: '100%', padding: keyPadding, boxSizing: 'border-box', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: letterH, position: 'relative', zIndex: pressedKey === letter ? 10 : 2, transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
+                    style={{
+                      touchAction: 'manipulation',
+                      width: '100%',
+                      height: '100%',
+                      padding: keyPadding,
+                      boxSizing: 'border-box',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: letterH,
+                      position: 'relative',
+                      zIndex: pressedKey === letter ? 10 : 2,
+                      transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)',
+                      transition: 'transform 0.1s ease-out',
+                      backgroundColor: pressedKey === letter ? 'rgb(156, 163, 175)' : undefined, // match active:bg-gray-400
+                    }}
                   >
                     {letter}
                   </button>
@@ -1458,7 +1670,11 @@ export default function WordPuzzleGame() {
               ))}
             </div>
             {/* Middle row: A-L */}
-            <div className="flex justify-center relative flex-nowrap" style={{ gap: gapPx, marginBottom: gapPx }}>
+            <div
+              className="flex justify-center relative flex-nowrap"
+              style={{ gap: gapPx, marginBottom: rowGapPx }}
+              onPointerDown={handleMiddleRowBackgroundPointerDown}
+            >
               {['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'].map((letter) => (
                 <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0 }}>
                   <button
@@ -1478,7 +1694,25 @@ export default function WordPuzzleGame() {
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
-                    style={{ touchAction: 'manipulation', width: '100%', height: '100%', padding: keyPadding, boxSizing: 'border-box', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: letterH, position: 'relative', zIndex: pressedKey === letter ? 10 : 2, transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
+                    style={{
+                      touchAction: 'manipulation',
+                      width: '100%',
+                      height: '100%',
+                      padding: keyPadding,
+                      boxSizing: 'border-box',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: letterH,
+                      position: 'relative',
+                      zIndex: pressedKey === letter ? 10 : 2,
+                      transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)',
+                      transition: 'transform 0.1s ease-out',
+                      backgroundColor: pressedKey === letter ? 'rgb(156, 163, 175)' : undefined,
+                    }}
                   >
                     {letter}
                   </button>
@@ -1486,7 +1720,11 @@ export default function WordPuzzleGame() {
               ))}
             </div>
             {/* Bottom row: Shift + Z-M + Backspace */}
-            <div className="flex justify-center relative flex-nowrap" style={{ gap: gapPx, marginBottom: gapPx }}>
+            <div
+              className="flex justify-center relative flex-nowrap"
+              style={{ gap: gapPx, marginBottom: rowGapPx }}
+              onPointerDown={handleBottomRowBackgroundPointerDown}
+            >
               <div style={{ position: 'relative', width: specialWidth, height: specialHeight, flexShrink: 0 }}>
                 <button
                   type="button"
@@ -1520,7 +1758,31 @@ export default function WordPuzzleGame() {
                   onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                   className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base disabled:opacity-50 touch-manipulation"
                   disabled={!roundStarted||gameOver}
-                  style={{ touchAction: 'manipulation', width: '100%', height: '100%', padding: keyPadding, boxSizing: 'border-box', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: specialHeight, height: specialHeight, position: 'relative', zIndex: pressedKey === 'shift' ? 10 : 2, transform: pressedKey === 'shift' ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out', backgroundColor: mobileShiftActive ? 'rgb(156, 163, 175)' : undefined }}
+                  style={{
+                    touchAction: 'manipulation',
+                    width: '100%',
+                    height: '100%',
+                    padding: keyPadding,
+                    boxSizing: 'border-box',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: specialHeight,
+                    height: specialHeight,
+                    position: 'relative',
+                    zIndex: pressedKey === 'shift' ? 10 : 2,
+                    transform: pressedKey === 'shift' ? 'scale(1.3)' : 'scale(1)',
+                    transition: 'transform 0.1s ease-out',
+                    backgroundColor:
+                      pressedKey === 'shift'
+                        ? 'rgb(156, 163, 175)' // active shade
+                        : mobileShiftActive
+                        ? 'rgb(156, 163, 175)' // keep existing visual for active shift
+                        : undefined,
+                  }}
                   title={mobileCapsLock ? 'Caps lock on (tap to turn off)' : mobileShiftActive ? 'Next letter capital (double-tap for caps lock)' : 'Tap for one capital letter; double-tap for caps lock'}
                   aria-label={mobileCapsLock ? 'Caps lock on' : mobileShiftActive ? 'Next letter will be capital' : 'Shift'}
                 >
@@ -1549,7 +1811,25 @@ export default function WordPuzzleGame() {
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
-                    style={{ touchAction: 'manipulation', width: '100%', height: '100%', padding: keyPadding, boxSizing: 'border-box', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: letterH, position: 'relative', zIndex: pressedKey === letter ? 10 : 2, transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
+                    style={{
+                      touchAction: 'manipulation',
+                      width: '100%',
+                      height: '100%',
+                      padding: keyPadding,
+                      boxSizing: 'border-box',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: letterH,
+                      position: 'relative',
+                      zIndex: pressedKey === letter ? 10 : 2,
+                      transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)',
+                      transition: 'transform 0.1s ease-out',
+                      backgroundColor: pressedKey === letter ? 'rgb(156, 163, 175)' : undefined,
+                    }}
                   >
                     {letter}
                   </button>
@@ -1576,7 +1856,26 @@ export default function WordPuzzleGame() {
                   }}
                   className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base disabled:opacity-50 touch-manipulation"
                   disabled={!roundStarted||gameOver}
-                  style={{ touchAction: 'manipulation', width: '100%', height: '100%', padding: keyPadding, boxSizing: 'border-box', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: specialHeight, height: specialHeight, position: 'relative', zIndex: pressedKey === 'backspace' ? 10 : 2, transform: pressedKey === 'backspace' ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
+                  style={{
+                    touchAction: 'manipulation',
+                    width: '100%',
+                    height: '100%',
+                    padding: keyPadding,
+                    boxSizing: 'border-box',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: specialHeight,
+                    height: specialHeight,
+                    position: 'relative',
+                    zIndex: pressedKey === 'backspace' ? 10 : 2,
+                    transform: pressedKey === 'backspace' ? 'scale(1.3)' : 'scale(1)',
+                    transition: 'transform 0.1s ease-out',
+                    backgroundColor: pressedKey === 'backspace' ? 'rgb(156, 163, 175)' : undefined,
+                  }}
                 >
                   ⌫
                 </button>
