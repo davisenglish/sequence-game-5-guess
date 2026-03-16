@@ -943,14 +943,14 @@ export default function WordPuzzleGame() {
             >
               <img 
                 src={process.env.PUBLIC_URL + "/letter-game-logo2.png"} 
-                alt="Sequence Game Logo" 
+                alt="Stringlish Game Logo"
                 className="w-24 h-24 mb-4 object-contain"
                 onError={(e) => {
                   e.target.style.display = 'none';
                 }}
               />
             </a>
-            <h1 className="text-3xl font-bold">Sequence</h1>
+            <h1 className="text-3xl font-bold">Stringlish</h1>
           </>
         )}
         {!roundStarted && (
@@ -1009,7 +1009,7 @@ export default function WordPuzzleGame() {
                     <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-800"></div>
                     
                     <p className="leading-relaxed">
-                      Use the provided letters, in the order they appear, to create words—there can be other letters before, after and between the provided letters, as long as they remain in Sequence.
+                      Use the provided letters, in the order they appear, to create words—there can be other letters before, after and between the provided letters, as long as they remain in Stringlish order.
                     </p>
                   </div>
                 </div>
