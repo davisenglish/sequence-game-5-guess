@@ -194,6 +194,7 @@ export default function WordPuzzleGame() {
   const [gameOver, setGameOver] = useState(false);
   const [manuallyEnded, setManuallyEnded] = useState(false);
   const [score, setScore] = useState(0);
+  const [scorePopping, setScorePopping] = useState(false);
   const [letterPopup, setLetterPopup] = useState(null);
   const [showRevealAnimation, setShowRevealAnimation] = useState(false);
   const [revealAnimationPlayedThisRound, setRevealAnimationPlayedThisRound] = useState(false);
@@ -229,15 +230,8 @@ export default function WordPuzzleGame() {
   const [hintFillProgress, setHintFillProgress] = useState(0);
   const [hintReadyPop, setHintReadyPop] = useState(false);
   const [needsScrollForKeyboard, setNeedsScrollForKeyboard] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 375));
-  const [viewportHeight, setViewportHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 667));
   const [pressedKey, setPressedKey] = useState(null);
-  const [mobileShiftActive, setMobileShiftActive] = useState(false);
-  const [mobileCapsLock, setMobileCapsLock] = useState(false);
   const [showMobileGuessList, setShowMobileGuessList] = useState(false);
-  const mobileShiftOnAtRef = useRef(0);
-  const mobileShiftActiveRef = useRef(false);
-  const mobileCapsLockRef = useRef(false);
   const mobileGuessListSnapshotRef = useRef([]); // snapshot when opening to avoid re-render loops
   const hintUnlockTimeoutRef = useRef(null);
   const hintFillIntervalRef = useRef(null);
@@ -250,6 +244,7 @@ export default function WordPuzzleGame() {
   const lastKeyPressRef = useRef({ key: null, time: 0 });
   const backspaceHoldTimeoutRef = useRef(null);
   const backspaceHoldIntervalRef = useRef(null);
+  const prevScoreRef = useRef(0);
   const isSubmittingRef = useRef(false);
   const KEYBOARD_BOTTOM_OFFSET = 10;
   const KEYBOARD_HEIGHT_ESTIMATE = 280;
@@ -265,13 +260,9 @@ export default function WordPuzzleGame() {
       setStats(JSON.parse(savedStats));
     }
     
-    // Detect mobile/tablet (show virtual keyboard for phones and tablets) and track viewport for keyboard scaling
+    // Detect mobile/tablet (show virtual keyboard for phones and tablets)
     const checkMobile = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      setIsMobile(w <= 1024);
-      setViewportWidth(w);
-      setViewportHeight(h);
+      setIsMobile(window.innerWidth <= 1024);
     };
     
     checkMobile();
@@ -786,6 +777,10 @@ export default function WordPuzzleGame() {
       setErrorMessage('Letters only, please');
       return;
     }
+    const now = Date.now();
+    if (lastKeyPressRef.current.key === letter && now - lastKeyPressRef.current.time < 100) return;
+    lastKeyPressRef.current = { key: letter, time: now };
+
     const inputEl = inputRef.current;
     if (inputEl) {
       if (document.activeElement !== inputEl) inputEl.focus();
@@ -919,6 +914,17 @@ export default function WordPuzzleGame() {
     });
   };
 
+  // Pop the score box (scale + color) when score increases
+  useEffect(() => {
+    if (score > prevScoreRef.current) {
+      setScorePopping(true);
+      const t = setTimeout(() => setScorePopping(false), 220);
+      prevScoreRef.current = score;
+      return () => clearTimeout(t);
+    }
+    prevScoreRef.current = score;
+  }, [score]);
+
   const shapes = [
     { shape: 'circle', color: '#c85f31' },
     { shape: 'diamond', color: '#195b7c' },
@@ -939,14 +945,14 @@ export default function WordPuzzleGame() {
             >
               <img 
                 src={process.env.PUBLIC_URL + "/letter-game-logo2.png"} 
-                alt="Stringlish Game Logo"
+                alt="Sequence Game Logo" 
                 className="w-24 h-24 mb-4 object-contain"
                 onError={(e) => {
                   e.target.style.display = 'none';
                 }}
               />
             </a>
-            <h1 className="text-3xl font-bold">Stringlish</h1>
+            <h1 className="text-3xl font-bold">Sequence</h1>
           </>
         )}
         {!roundStarted && (
@@ -956,46 +962,58 @@ export default function WordPuzzleGame() {
           </p>
         )}
         {roundStarted && (
-          <div className="flex items-center w-full">
-            <div className="flex-1 min-w-0" />
-            <div className="flex items-center justify-center flex-shrink-0 space-x-3">
-              <a 
-                href="https://davisenglish.github.io/sequence-game-home/"
-                className="text-gray-600 hover:text-gray-800 transition-colors"
-                title="Home"
-              >
-                <FontAwesomeIcon icon={faHouseChimney} className="text-lg" />
-              </a>
-              <button 
-                onClick={() => setShowStats(true)}
-                className="text-gray-600 hover:text-gray-800 transition-colors"
-                title="Statistics"
-              >
-                <FontAwesomeIcon icon={faChartSimple} className="text-lg" />
-              </button>
-              <button 
-                onClick={() => setShowRules(true)}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-                title="Rules"
-              >
-                <FontAwesomeIcon icon={faCircleQuestion} className="text-xl" />
-              </button>
-            </div>
-            <div className="flex-1 min-w-0 flex items-center justify-end">
-              {!gameOver && (
-                <button
-                  type="button"
-                  onClick={handleEndGame}
-                  className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-                >
-                  Give Up?
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-        {roundStarted && (
           <>
+            {/* Top bar: Score (left) and header controls (right) */}
+            <div className="flex items-center w-full mb-1">
+              <div className="flex-1 min-w-0 flex items-center">
+                {!gameOver && (
+                  <span className="tabular-nums border border-gray-300 rounded px-2 py-1 bg-gray-50">
+                    <span
+                      className={`inline-block text-base font-semibold ${
+                        scorePopping ? 'score-pop' : 'text-gray-700'
+                      }`}
+                    >
+                      Score: {score}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-center flex-shrink-0 space-x-3">
+                <a 
+                  href="https://davisenglish.github.io/sequence-game-home/"
+                  className="text-gray-600 hover:text-gray-800 transition-colors"
+                  title="Home"
+                >
+                  <FontAwesomeIcon icon={faHouseChimney} className="text-lg" />
+                </a>
+                <button 
+                  onClick={() => setShowStats(true)}
+                  className="text-gray-600 hover:text-gray-800 transition-colors"
+                  title="Statistics"
+                >
+                  <FontAwesomeIcon icon={faChartSimple} className="text-lg" />
+                </button>
+                <button 
+                  onClick={() => setShowRules(true)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  title="Rules"
+                >
+                  <FontAwesomeIcon icon={faCircleQuestion} className="text-xl" />
+                </button>
+              </div>
+              <div className="flex-1 min-w-0 flex items-center justify-end">
+                {!gameOver && (
+                  <button
+                    type="button"
+                    onClick={handleEndGame}
+                    className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    Give Up?
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Tooltip-style instructions */}
             {showInstructions && (
               <div className={`${isMobile ? 'fixed inset-0 z-50' : 'fixed top-20 left-1/2 transform -translate-x-1/2 z-50 mx-4'}`} onClick={isMobile ? () => setShowInstructions(false) : undefined}>
@@ -1005,7 +1023,7 @@ export default function WordPuzzleGame() {
                     <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-800"></div>
                     
                     <p className="leading-relaxed">
-                      Use the provided letters, in the order they appear, to create words—there can be other letters before, after and between the provided letters, as long as they remain in Stringlish order.
+                      Use the provided letters, in the order they appear, to create words—there can be other letters before, after and between the provided letters, as long as they remain in Sequence.
                     </p>
                   </div>
                 </div>
@@ -1094,17 +1112,6 @@ export default function WordPuzzleGame() {
               </div>
             );
           })}
-          </div>
-          {/* Score */}
-          <div className="mt-1">
-            <div className="relative inline-block font-bold text-center">
-              <div className="text-lg leading-tight">
-                Score: {score}
-              </div>
-              {letterPopup && (
-                <span className="absolute inset-0 flex items-center justify-center text-green-600 font-bold animate-float-up" style={{fontSize:'12pt'}}>{letterPopup}</span>
-              )}
-            </div>
           </div>
           {/* Input section */}
           <div ref={contentAboveKeyboardRef} className="space-y-4">
@@ -1365,601 +1372,83 @@ export default function WordPuzzleGame() {
         </div>
       )}
 
-      {/* Virtual Keyboard - only on mobile; always fixed at bottom of screen; scales to viewport with 8px edge margin */}
-      {isMobile && roundStarted && !gameOver && !showRules && (() => {
-        const edgeMargin = 8;
-        // Make keys appear larger without increasing overall keyboard width:
-        // increase per-key base size and reduce the base gap so that
-        // the original design row width (422px) is preserved.
-        const originalKeyBaseWidth = 35;
-        const originalGapBase = 8;
-        const keyCountTopRow = 10;
-        const gapCountTopRow = keyCountTopRow - 1;
-        const originalDesignRowWidth =
-          keyCountTopRow * originalKeyBaseWidth + gapCountTopRow * originalGapBase; // 422
-
-        // New (larger) base key size
-        const keyBaseWidth = originalKeyBaseWidth + 3; // 38
-        const keyBaseHeight = 45 + 3; // 48
-        // Choose base gap so total row width stays the same as before
-        const gapBase =
-          (originalDesignRowWidth - keyCountTopRow * keyBaseWidth) / gapCountTopRow;
-
-        const availableWidth = Math.max(0, viewportWidth - 2 * edgeMargin);
-        const designRowWidth = originalDesignRowWidth;
-
-        // First compute scale assuming gaps scale linearly with keys
-        let scale = availableWidth / designRowWidth;
-        let gapPx = gapBase * scale;
-
-        const gapMax = 10;
-        const gapMin = 4;
-
-        // If the scaled gap would exceed our desired maximum, recompute scale so that:
-        // rowWidth = keyCountTopRow * (keyBaseWidth * scale) + gapCountTopRow * gapMax ~= availableWidth
-        if (gapPx > gapMax && keyCountTopRow * keyBaseWidth > 0) {
-          scale = (availableWidth - gapCountTopRow * gapMax) / (keyCountTopRow * keyBaseWidth);
-          gapPx = gapMax;
-        }
-
-        // Final clamped / rounded gap (horizontal spacing between keys)
-        gapPx = Math.max(gapMin, Math.min(gapMax, Math.round(gapPx)));
-
-        // Vertical spacing between rows: 60% more than horizontal gap
-        const rowGapPx = Math.round(gapPx * 1.6);
-
-        const letterW = Math.round(keyBaseWidth * scale);
-
-        const keyPadding = 4; // 20% less than 5
-        const containerPaddingH = 8; // 20% less than 23; matches edge margin
-        const containerPaddingB = 8;   // 20% less than 10
-
-        // Constrain overall keyboard height to at most 40% of viewport height, capped at 350px.
-        const maxKeyboardHeight =
-          typeof viewportHeight === 'number' && viewportHeight > 0
-            ? Math.min(viewportHeight * 0.4, 350)
-            : 350;
-        // Total non-key vertical space inside the keyboard container:
-        // top padding (8) + bottom padding (containerPaddingB) + 2 gaps between three rows.
-        const nonKeyVertical = 8 + containerPaddingB + 2 * rowGapPx;
-        // We have three key rows plus the Submit button row (which matches key height): 4 * letterH.
-        const maxLetterHeightFromContainer = Math.floor(
-          (maxKeyboardHeight - nonKeyVertical) / 4
-        );
-        const unconstrainedLetterH = Math.round(keyBaseHeight * scale);
-        const letterH = Math.max(
-          30,
-          Math.min(60, unconstrainedLetterH, maxLetterHeightFromContainer)
-        );
-
-        // Make bottom row (Shift + Z-M + Backspace) span the same usable width
-        // as the top row, so Shift/Backspace outer edges are also ~8px from viewport.
-        const bottomLettersCount = 7; // Z, X, C, V, B, N, M
-        const bottomKeysTotalWidth = bottomLettersCount * letterW;
-        const bottomGapCount = bottomLettersCount + 2 - 1; // 7 letters + 2 specials = 9 keys -> 8 gaps
-        const bottomGapsTotalWidth = bottomGapCount * gapPx;
-        const specialWidth = Math.max(
-          0,
-          Math.round((availableWidth - bottomKeysTotalWidth - bottomGapsTotalWidth) / 2)
-        );
-        const submitWidth = bottomKeysTotalWidth + (bottomLettersCount - 1) * gapPx;
-        const specialHeight = letterH;
-
-        // Apple-style popup: 20% larger than key, 4px above, connected by stem
-        const popupScale = 1.2;
-        const popupW = Math.round(letterW * popupScale);
-        const popupH = Math.round(letterH * popupScale);
-        const popupGap = 4;
-        const keyBg = '#e5e7eb'; // gray-200
-
-        // Helper to map a horizontal position to the nearest key in a row
-        const findNearestIndexByCenters = (x, widths, gap) => {
-          let cursor = 0;
-          let bestIndex = 0;
-          let bestDist = Infinity;
-          for (let i = 0; i < widths.length; i++) {
-            const center = cursor + widths[i] / 2;
-            const dist = Math.abs(x - center);
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestIndex = i;
-            }
-            cursor += widths[i] + gap;
-          }
-          return bestIndex;
-        };
-
-        const handleTopRowBackgroundPointerDown = (event) => {
-          if (!roundStarted || gameOver) return;
-          const target = event.target;
-          if (target && target.closest && target.closest('button')) return;
-
-          const rect = event.currentTarget.getBoundingClientRect();
-          const x = event.clientX - rect.left;
-          const letters = ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'];
-          const widths = new Array(letters.length).fill(letterW);
-          const idx = findNearestIndexByCenters(x, widths, gapPx);
-          const letter = letters[idx] || letters[0];
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          setPressedKey(letter);
-          const useCapital = mobileShiftActiveRef.current;
-          handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
-          if (useCapital && !mobileCapsLockRef.current) {
-            mobileShiftActiveRef.current = false;
-            setMobileShiftActive(false);
-          }
-          refocusInputSoon();
-        };
-
-        const handleTopRowPointerUpOrCancel = () => {
-          setPressedKey(null);
-        };
-
-        const handleMiddleRowBackgroundPointerDown = (event) => {
-          if (!roundStarted || gameOver) return;
-          const target = event.target;
-          if (target && target.closest && target.closest('button')) return;
-
-          const rect = event.currentTarget.getBoundingClientRect();
-          const x = event.clientX - rect.left;
-          const letters = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'];
-          const widths = new Array(letters.length).fill(letterW);
-          const idx = findNearestIndexByCenters(x, widths, gapPx);
-          const letter = letters[idx] || letters[0];
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          setPressedKey(letter);
-          const useCapital = mobileShiftActiveRef.current;
-          handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
-          if (useCapital && !mobileCapsLockRef.current) {
-            mobileShiftActiveRef.current = false;
-            setMobileShiftActive(false);
-          }
-          refocusInputSoon();
-        };
-
-        const handleMiddleRowPointerUpOrCancel = () => {
-          setPressedKey(null);
-        };
-
-        const handleBottomRowBackgroundPointerDown = (event) => {
-          if (!roundStarted || gameOver) return;
-          const target = event.target;
-          // Do not override actual button clicks, including Submit
-          if (target && target.closest && target.closest('button')) return;
-
-          const rect = event.currentTarget.getBoundingClientRect();
-          const x = event.clientX - rect.left;
-
-          const keys = [
-            { type: 'shift' },
-            { type: 'letter', value: 'Z' },
-            { type: 'letter', value: 'X' },
-            { type: 'letter', value: 'C' },
-            { type: 'letter', value: 'V' },
-            { type: 'letter', value: 'B' },
-            { type: 'letter', value: 'N' },
-            { type: 'letter', value: 'M' },
-            { type: 'backspace' },
-          ];
-          const widths = [
-            specialWidth,
-            letterW,
-            letterW,
-            letterW,
-            letterW,
-            letterW,
-            letterW,
-            letterW,
-            specialWidth,
-          ];
-
-          const idx = findNearestIndexByCenters(x, widths, gapPx);
-          const key = keys[idx] || keys[0];
-
-          event.preventDefault();
-          event.stopPropagation();
-
-          if (key.type === 'letter') {
-            const letter = key.value;
-            setPressedKey(letter);
-            const useCapital = mobileShiftActiveRef.current;
-            handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
-            if (useCapital && !mobileCapsLockRef.current) {
-              mobileShiftActiveRef.current = false;
-              setMobileShiftActive(false);
-            }
-            refocusInputSoon();
-          } else if (key.type === 'shift') {
-            setPressedKey('shift');
-            const now = Date.now();
-            if (!mobileShiftActive) {
-              mobileShiftActiveRef.current = true;
-              mobileCapsLockRef.current = false;
-              setMobileShiftActive(true);
-              setMobileCapsLock(false);
-              mobileShiftOnAtRef.current = now;
-            } else if (mobileCapsLock) {
-              mobileShiftActiveRef.current = false;
-              mobileCapsLockRef.current = false;
-              setMobileShiftActive(false);
-              setMobileCapsLock(false);
-            } else {
-              if (now - mobileShiftOnAtRef.current < 450) {
-                mobileCapsLockRef.current = true;
-                setMobileCapsLock(true);
-              } else {
-                mobileShiftActiveRef.current = false;
-                setMobileShiftActive(false);
-              }
-            }
-            refocusInputSoon();
-          } else if (key.type === 'backspace') {
-            setPressedKey('backspace');
-            handleKeyboardBackspace();
-            refocusInputSoon();
-          }
-        };
-        return (
+      {/* Virtual Keyboard - only on mobile; always fixed at bottom of screen */}
+      {isMobile && roundStarted && !gameOver && !showRules && (
         <>
           <div style={{ marginTop: 15, minHeight: 260 }} aria-hidden />
           <div
             className={isMobile ? "" : "mt-4"}
             style={isMobile
-              ? {
-                  position: 'fixed',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  padding: `8px ${containerPaddingH}px ${containerPaddingB}px`,
-                  borderTop: '1px solid #e5e7eb', // same gray as Rules modal divider
-                  backgroundColor: '#ffffff',
-                  zIndex: 20,
-                }
+              ? { position: 'fixed', bottom: 10, left: 0, right: 0, padding: '0 23px', paddingBottom: 10, zIndex: 20 }
               : { padding: '0 10px' }}
           >
-            {/* Top row: Q-P — letter keys scale with viewport */}
-            <div
-              className="flex justify-center relative flex-nowrap"
-              style={{ gap: gapPx, marginBottom: rowGapPx }}
-              onPointerDown={handleTopRowBackgroundPointerDown}
-              onPointerUp={handleTopRowPointerUpOrCancel}
-              onPointerCancel={handleTopRowPointerUpOrCancel}
-            >
+            {/* Top row: Q-P */}
+            <div className="flex gap-1 mb-1.5 justify-center relative" style={{ marginLeft: '-30px', marginRight: '-30px', paddingLeft: '30px', paddingRight: '30px' }}>
               {['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'].map((letter) => (
-                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0, overflow: 'visible' }}>
+                <div key={letter} style={{ position: 'relative', flex: '0 0 calc((100% - 20px - 36px + 40px) / 10)' }}>
                   <button
                     type="button"
-                    onPointerDown={(e) => {
-                      e.preventDefault(); e.stopPropagation();
-                      setPressedKey(letter);
-                      const useCapital = mobileShiftActiveRef.current;
-                      handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
-                      if (useCapital && !mobileCapsLockRef.current) {
-                        mobileShiftActiveRef.current = false;
-                        setMobileShiftActive(false);
-                      }
-                      refocusInputSoon();
-                    }}
+                    onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(letter); handleKeyboardLetter(letter.toLowerCase()); refocusInputSoon(); }}
                     onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
+                    className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold py-4 rounded text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
-                    style={{
-                      touchAction: 'manipulation',
-                      width: '100%',
-                      height: '100%',
-                      padding: keyPadding,
-                      boxSizing: 'border-box',
-                      userSelect: 'none',
-                      WebkitUserSelect: 'none',
-                      WebkitTapHighlightColor: 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: letterH,
-                      position: 'relative',
-                      zIndex: 2,
-                      pointerEvents: 'auto',
-                    }}
+                    style={{ touchAction: 'manipulation', width: '100%', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '54px', position: 'relative', zIndex: pressedKey === letter ? 10 : 2, transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
                   >
-                    {pressedKey === letter ? '' : letter}
+                    {letter}
                   </button>
-                  {pressedKey === letter && (
-                    <>
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          bottom: '100%',
-                          height: popupGap,
-                          backgroundColor: keyBg,
-                          borderTopLeftRadius: 6,
-                          borderTopRightRadius: 6,
-                          zIndex: 10,
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          marginLeft: -popupW / 2,
-                          bottom: `calc(100% + ${popupGap}px)`,
-                          width: popupW,
-                          height: popupH,
-                          backgroundColor: keyBg,
-                          borderRadius: 8,
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '1.2em',
-                          fontWeight: 600,
-                          color: '#1f2937',
-                          zIndex: 10,
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        {letter}
-                      </div>
-                    </>
-                  )}
                 </div>
               ))}
             </div>
             {/* Middle row: A-L */}
-            <div
-              className="flex justify-center relative flex-nowrap"
-              style={{ gap: gapPx, marginBottom: rowGapPx }}
-              onPointerDown={handleMiddleRowBackgroundPointerDown}
-              onPointerUp={handleMiddleRowPointerUpOrCancel}
-              onPointerCancel={handleMiddleRowPointerUpOrCancel}
-            >
+            <div className="flex gap-1 mb-1.5 justify-center relative" style={{ marginLeft: '-40px', marginRight: '-40px', paddingLeft: '40px', paddingRight: '40px' }}>
               {['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'].map((letter) => (
-                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0, overflow: 'visible' }}>
+                <div key={letter} style={{ position: 'relative', flex: '0 0 calc((100% - 20px - 36px + 40px) / 10)' }}>
                   <button
                     type="button"
-                    onPointerDown={(e) => {
-                      e.preventDefault(); e.stopPropagation();
-                      setPressedKey(letter);
-                      const useCapital = mobileShiftActiveRef.current;
-                      handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
-                      if (useCapital && !mobileCapsLockRef.current) {
-                        mobileShiftActiveRef.current = false;
-                        setMobileShiftActive(false);
-                      }
-                      refocusInputSoon();
-                    }}
+                    onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(letter); handleKeyboardLetter(letter.toLowerCase()); refocusInputSoon(); }}
                     onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
+                    className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold py-4 rounded text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
-                    style={{
-                      touchAction: 'manipulation',
-                      width: '100%',
-                      height: '100%',
-                      padding: keyPadding,
-                      boxSizing: 'border-box',
-                      userSelect: 'none',
-                      WebkitUserSelect: 'none',
-                      WebkitTapHighlightColor: 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: letterH,
-                      position: 'relative',
-                      zIndex: 2,
-                      pointerEvents: 'auto',
-                    }}
+                    style={{ touchAction: 'manipulation', width: '100%', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '54px', position: 'relative', zIndex: pressedKey === letter ? 10 : 2, transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
                   >
-                    {pressedKey === letter ? '' : letter}
+                    {letter}
                   </button>
-                  {pressedKey === letter && (
-                    <>
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          bottom: '100%',
-                          height: popupGap,
-                          backgroundColor: keyBg,
-                          borderTopLeftRadius: 6,
-                          borderTopRightRadius: 6,
-                          zIndex: 10,
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          marginLeft: -popupW / 2,
-                          bottom: `calc(100% + ${popupGap}px)`,
-                          width: popupW,
-                          height: popupH,
-                          backgroundColor: keyBg,
-                          borderRadius: 8,
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '1.2em',
-                          fontWeight: 600,
-                          color: '#1f2937',
-                          zIndex: 10,
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        {letter}
-                      </div>
-                    </>
-                  )}
                 </div>
               ))}
             </div>
-            {/* Bottom row: Shift + Z-M + Backspace */}
-            <div
-              className="flex justify-center relative flex-nowrap"
-              style={{ gap: gapPx, marginBottom: rowGapPx }}
-              onPointerDown={handleBottomRowBackgroundPointerDown}
-              onPointerUp={handleMiddleRowPointerUpOrCancel}
-              onPointerCancel={handleMiddleRowPointerUpOrCancel}
-            >
-              <div style={{ position: 'relative', width: specialWidth, height: specialHeight, flexShrink: 0 }}>
+            {/* Bottom row: Submit + Z-M + Backspace */}
+            <div className="flex gap-1 justify-center relative" style={{ marginLeft: '-30px', marginRight: '-30px', paddingLeft: '30px', paddingRight: '30px' }}>
+              <div style={{ position: 'relative', flex: '0 0 calc((100% - 20px - 36px + 40px) / 10 * 1.8)', width: 'calc((100% - 20px - 36px + 40px) / 10 * 1.8)', boxSizing: 'border-box' }}>
                 <button
                   type="button"
-                  onPointerDown={(e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    setPressedKey('shift');
-                    const now = Date.now();
-                    if (!mobileShiftActive) {
-                      mobileShiftActiveRef.current = true;
-                      mobileCapsLockRef.current = false;
-                      setMobileShiftActive(true);
-                      setMobileCapsLock(false);
-                      mobileShiftOnAtRef.current = now;
-                    } else if (mobileCapsLock) {
-                      mobileShiftActiveRef.current = false;
-                      mobileCapsLockRef.current = false;
-                      setMobileShiftActive(false);
-                      setMobileCapsLock(false);
-                    } else {
-                      if (now - mobileShiftOnAtRef.current < 450) {
-                        mobileCapsLockRef.current = true;
-                        setMobileCapsLock(true);
-                      } else {
-                        mobileShiftActiveRef.current = false;
-                        setMobileShiftActive(false);
-                      }
-                    }
-                    refocusInputSoon();
-                  }}
+                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey('submit'); const val = (inputRef.current?.value ?? inputValueRef.current ?? input) ?? ''; handleSubmit(e, val); refocusInputSoon(); }}
                   onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                   onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                  className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base disabled:opacity-50 touch-manipulation"
+                  className="text-white rounded text-xs font-semibold disabled:opacity-50 touch-manipulation"
                   disabled={!roundStarted||gameOver}
-                  style={{
-                    touchAction: 'manipulation',
-                    width: '100%',
-                    height: '100%',
-                    padding: keyPadding,
-                    boxSizing: 'border-box',
-                    userSelect: 'none',
-                    WebkitUserSelect: 'none',
-                    WebkitTapHighlightColor: 'transparent',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: specialHeight,
-                    height: specialHeight,
-                    position: 'relative',
-                    zIndex: pressedKey === 'shift' ? 10 : 2,
-                    transform: pressedKey === 'shift' ? 'scale(1.3)' : 'scale(1)',
-                    transition: 'transform 0.1s ease-out',
-                    backgroundColor:
-                      pressedKey === 'shift'
-                        ? 'rgb(156, 163, 175)' // active shade
-                        : mobileShiftActive
-                        ? 'rgb(156, 163, 175)' // keep existing visual for active shift
-                        : undefined,
-                  }}
-                  title={mobileCapsLock ? 'Caps lock on (tap to turn off)' : mobileShiftActive ? 'Next letter capital (double-tap for caps lock)' : 'Tap for one capital letter; double-tap for caps lock'}
-                  aria-label={mobileCapsLock ? 'Caps lock on' : mobileShiftActive ? 'Next letter will be capital' : 'Shift'}
+                  style={{ backgroundColor: '#195b7c', touchAction: 'manipulation', width: '100%', padding: '16px 14px', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '54px', height: '54px', position: 'relative', zIndex: pressedKey === 'submit' ? 10 : 2, boxSizing: 'border-box', transform: pressedKey === 'submit' ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
                 >
-                  <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-                    <span>⇧</span>
-                    {mobileCapsLock && <span style={{ width: '1em', borderBottom: '2px solid currentColor', marginTop: '-1px' }} aria-hidden />}
-                  </span>
+                  Submit
                 </button>
               </div>
               {['Z', 'X', 'C', 'V', 'B', 'N', 'M'].map((letter) => (
-                <div key={letter} style={{ position: 'relative', width: letterW, height: letterH, flexShrink: 0, overflow: 'visible' }}>
+                <div key={letter} style={{ position: 'relative', flex: '0 0 calc((100% - 20px - 36px + 40px) / 10)' }}>
                   <button
                     type="button"
-                    onPointerDown={(e) => {
-                      e.preventDefault(); e.stopPropagation();
-                      setPressedKey(letter);
-                      const useCapital = mobileShiftActiveRef.current;
-                      handleKeyboardLetter(useCapital ? letter : letter.toLowerCase());
-                      if (useCapital && !mobileCapsLockRef.current) {
-                        mobileShiftActiveRef.current = false;
-                        setMobileShiftActive(false);
-                      }
-                      refocusInputSoon();
-                    }}
+                    onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(letter); handleKeyboardLetter(letter.toLowerCase()); refocusInputSoon(); }}
                     onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
                     onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-base sm:text-lg transition-colors touch-manipulation"
+                    className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold py-4 rounded text-base sm:text-lg transition-colors touch-manipulation"
                     disabled={!roundStarted||gameOver}
-                    style={{
-                      touchAction: 'manipulation',
-                      width: '100%',
-                      height: '100%',
-                      padding: keyPadding,
-                      boxSizing: 'border-box',
-                      userSelect: 'none',
-                      WebkitUserSelect: 'none',
-                      WebkitTapHighlightColor: 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: letterH,
-                      position: 'relative',
-                      zIndex: 2,
-                      pointerEvents: 'auto',
-                    }}
+                    style={{ touchAction: 'manipulation', width: '100%', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '54px', position: 'relative', zIndex: pressedKey === letter ? 10 : 2, transform: pressedKey === letter ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
                   >
-                    {pressedKey === letter ? '' : letter}
+                    {letter}
                   </button>
-                  {pressedKey === letter && (
-                    <>
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          bottom: '100%',
-                          height: popupGap,
-                          backgroundColor: keyBg,
-                          borderTopLeftRadius: 6,
-                          borderTopRightRadius: 6,
-                          zIndex: 10,
-                        }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          marginLeft: -popupW / 2,
-                          bottom: `calc(100% + ${popupGap}px)`,
-                          width: popupW,
-                          height: popupH,
-                          backgroundColor: keyBg,
-                          borderRadius: 8,
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '1.2em',
-                          fontWeight: 600,
-                          color: '#1f2937',
-                          zIndex: 10,
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        {letter}
-                      </div>
-                    </>
-                  )}
                 </div>
               ))}
-              <div style={{ position: 'relative', width: specialWidth, height: specialHeight, flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: '0 0 calc((100% - 20px - 36px + 40px) / 10 * 1.8)', width: 'calc((100% - 20px - 36px + 40px) / 10 * 1.8)', boxSizing: 'border-box' }}>
                 <button
                   type="button"
                   onPointerDown={(e) => {
@@ -1978,51 +1467,17 @@ export default function WordPuzzleGame() {
                     if (backspaceHoldTimeoutRef.current) { clearTimeout(backspaceHoldTimeoutRef.current); backspaceHoldTimeoutRef.current = null; }
                     if (backspaceHoldIntervalRef.current) { clearInterval(backspaceHoldIntervalRef.current); backspaceHoldIntervalRef.current = null; }
                   }}
-                  className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded-lg text-base disabled:opacity-50 touch-manipulation"
+                  className="bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-semibold rounded text-base disabled:opacity-50 touch-manipulation"
                   disabled={!roundStarted||gameOver}
-                  style={{
-                    touchAction: 'manipulation',
-                    width: '100%',
-                    height: '100%',
-                    padding: keyPadding,
-                    boxSizing: 'border-box',
-                    userSelect: 'none',
-                    WebkitUserSelect: 'none',
-                    WebkitTapHighlightColor: 'transparent',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: specialHeight,
-                    height: specialHeight,
-                    position: 'relative',
-                    zIndex: pressedKey === 'backspace' ? 10 : 2,
-                    transform: pressedKey === 'backspace' ? 'scale(1.3)' : 'scale(1)',
-                    transition: 'transform 0.1s ease-out',
-                    backgroundColor: pressedKey === 'backspace' ? 'rgb(156, 163, 175)' : undefined,
-                  }}
+                  style={{ touchAction: 'manipulation', width: '100%', padding: '16px 14px', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '54px', height: '54px', position: 'relative', zIndex: pressedKey === 'backspace' ? 10 : 2, boxSizing: 'border-box', transform: pressedKey === 'backspace' ? 'scale(1.3)' : 'scale(1)', transition: 'transform 0.1s ease-out' }}
                 >
                   ⌫
                 </button>
               </div>
             </div>
-            {/* Submit: span from Z to M (same width as inner letter keys of bottom row), same height as keys */}
-            <div className="w-full mt-0.5 flex justify-center">
-              <button
-                type="button"
-                onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey('submit'); mobileShiftActiveRef.current = false; mobileCapsLockRef.current = false; setMobileShiftActive(false); setMobileCapsLock(false); const val = (inputRef.current?.value ?? inputValueRef.current ?? input) ?? ''; handleSubmit(e, val); refocusInputSoon(); }}
-                onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); setPressedKey(null); }}
-                className="text-white rounded-lg text-base font-semibold disabled:opacity-50 touch-manipulation"
-                disabled={!roundStarted||gameOver}
-                style={{ backgroundColor: '#195b7c', touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: pressedKey === 'submit' ? 10 : 2, transform: pressedKey === 'submit' ? 'scale(1.02)' : 'scale(1)', transition: 'transform 0.1s ease-out', width: submitWidth, height: letterH, minHeight: letterH }}
-              >
-                Submit
-              </button>
-            </div>
           </div>
         </>
-        );
-      })()}
+      )}
 
       {roundStarted && gameOver && (
         <>
@@ -2310,9 +1765,8 @@ export default function WordPuzzleGame() {
             <ul className="mb-3 text-xs list-disc pl-5 space-y-1">
               <li>Provided letters must be used in the order they appear.</li>
               <li>There can be letters before, after and between the provided letters, as long as they remain in order.</li>
-              <li>You get 5 guesses per round, but be careful! Incorrect words will cost you a guess.</li>
-              <li>+1 point per letter in each word.</li>
-              <li>Proper nouns and names are not valid words.</li>
+              <li>Incorrect words will cost you a guess, and proper nouns/names are not considered valid words.</li>
+              <li>Guess at least 1 word to win, and get +1 point per letter in each valid word!</li>
             </ul>
             <div className="mb-1 mt-2 text-base font-semibold">Example</div>
             <div className="mb-1 text-xs font-medium">Provided Letters:</div>
@@ -2455,6 +1909,23 @@ export default function WordPuzzleGame() {
         }
         .hint-ready-pop {
           animation: hintReadyPop 0.2s ease-out;
+        }
+        @keyframes scorePop {
+          0% {
+            transform: scale(1);
+            color: #374151;
+          }
+          50% {
+            transform: scale(1.08);
+            color: #1c6d2a;
+          }
+          100% {
+            transform: scale(1);
+            color: #374151;
+          }
+        }
+        .score-pop {
+          animation: scorePop 0.22s ease-out;
         }
         @keyframes currentGuessFade {
           0% { background-color: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); }
