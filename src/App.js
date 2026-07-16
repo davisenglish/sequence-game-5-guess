@@ -837,7 +837,12 @@ export default function WordPuzzleGame() {
     (async () => {
       const puzzleDay = getLocalDateString();
       lastLocalDateRef.current = puzzleDay;
-      if (readDailyCompletedUtc() !== puzzleDay && readDailyAbandonedUtc() !== puzzleDay) {
+      const params = new URLSearchParams(window.location.search);
+      const completedToday = readDailyCompletedUtc() === puzzleDay;
+      const abandonedToday = readDailyAbandonedUtc() === puzzleDay;
+
+      // 1) Resume an in-progress session first so a refresh never drops a game.
+      if (!completedToday && !abandonedToday) {
         const raw = localStorage.getItem(LS_DAILY.inProgress);
         if (raw) {
           try {
@@ -857,7 +862,27 @@ export default function WordPuzzleGame() {
           } catch (_) {}
         }
       }
-      setLetters(await getDailyLetters(puzzleDay));
+
+      // 2) Finished today → jump straight to the results / stats view.
+      if (completedToday) {
+        if (localStorage.getItem(LS_DAILY.snapshot)) {
+          setLetters(await getDailyLetters(puzzleDay));
+          handleBeholdYourWork();
+          return;
+        }
+        window.location.replace('/');
+        return;
+      }
+
+      // 3) Explicit play intent from the hub → begin now, skipping the landing.
+      if (params.get('play') === '1' && !abandonedToday) {
+        setLetters(await getDailyLetters(puzzleDay));
+        handleBegin();
+        return;
+      }
+
+      // 4) Reached the game without going through stringlish.com → send them there.
+      window.location.replace('/');
     })();
     // Load stats from localStorage - version specific (calendar streak may zero stale currentStreak)
     const savedStats = localStorage.getItem('sequenceGameStats_v2_4guess');
@@ -1127,6 +1152,8 @@ export default function WordPuzzleGame() {
       clearHintTimers();
       hintTimerStartedThisRoundRef.current = false;
       setLetters(await getDailyLetters(puzzleDay));
+      // New day: route back through the hub rather than showing a landing screen.
+      window.location.replace('/');
     };
     const id = setInterval(handleLocalDayTick, 60000);
     const onVis = () => {
@@ -1940,6 +1967,13 @@ export default function WordPuzzleGame() {
       dateLabel: formatLocalDateLong(new Date()),
     };
   }, [dailyUiEpoch]);
+
+  // Landing screen is deprecated — stringlish.com is the entry hub. While not in an
+  // active or finished round, render nothing; the mount effect routes the user into
+  // begin / resume / results, or back to the hub.
+  if (!roundStarted && !gameOver) {
+    return <div className="w-full min-h-[100dvh]" />;
+  }
 
   return (
     <div className={isMobile ? 'flex flex-col min-h-0' : ''}>
