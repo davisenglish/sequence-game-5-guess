@@ -870,8 +870,10 @@ export default function WordPuzzleGame() {
           handleBeholdYourWork();
           return;
         }
-        window.location.replace('/');
-        return;
+        if (process.env.NODE_ENV !== 'development') {
+          window.location.replace('/');
+          return;
+        }
       }
 
       // 3) Explicit play intent from the hub → begin now, skipping the landing.
@@ -881,8 +883,14 @@ export default function WordPuzzleGame() {
         return;
       }
 
-      // 4) Reached the game without going through stringlish.com → send them there.
-      window.location.replace('/');
+      // 4) In production, redirect to the hub if reached without going through it.
+      // In development, load the daily letters and show the landing screen so the
+      // game is testable locally (npm start) without the hub running.
+      if (process.env.NODE_ENV !== 'development') {
+        window.location.replace('/');
+        return;
+      }
+      setLetters(await getDailyLetters(puzzleDay));
     })();
     // Load stats from localStorage - version specific (calendar streak may zero stale currentStreak)
     const savedStats = localStorage.getItem('sequenceGameStats_v2_4guess');
@@ -1153,7 +1161,9 @@ export default function WordPuzzleGame() {
       hintTimerStartedThisRoundRef.current = false;
       setLetters(await getDailyLetters(puzzleDay));
       // New day: route back through the hub rather than showing a landing screen.
-      window.location.replace('/');
+      if (process.env.NODE_ENV !== 'development') {
+        window.location.replace('/');
+      }
     };
     const id = setInterval(handleLocalDayTick, 60000);
     const onVis = () => {
@@ -1968,10 +1978,9 @@ export default function WordPuzzleGame() {
     };
   }, [dailyUiEpoch]);
 
-  // Landing screen is deprecated — stringlish.com is the entry hub. While not in an
-  // active or finished round, render nothing; the mount effect routes the user into
-  // begin / resume / results, or back to the hub.
-  if (!roundStarted && !gameOver) {
+  // In production the hub handles all entry points, so suppress the in-app landing
+  // screen. In development (npm start) show it so the game is testable locally.
+  if (!roundStarted && !gameOver && process.env.NODE_ENV !== 'development') {
     return <div className="w-full min-h-[100dvh]" />;
   }
 
@@ -2015,7 +2024,9 @@ export default function WordPuzzleGame() {
             </a>
             <h1 className="text-3xl font-bold">Stringlish</h1>
             <p className="text-lg font-medium text-gray-600 mt-1 flex items-center justify-center gap-2">
-              <span className="select-none" aria-hidden>🔮</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" className="w-5 h-5 shrink-0" fill="currentColor" aria-hidden="true">
+                <path d="M522.1 537.4C525.9 541.6 528 547.2 528 552.9C528 565.7 517.6 576 504.9 576L135.1 576C122.3 576 112 565.6 112 552.9C112 547.2 114.1 541.7 117.9 537.4L169.6 480L470.4 480L522.1 537.4zM320 64C443.7 64 544 164.3 544 288C544 342.8 524.3 393.1 491.5 432L148.5 432C115.7 393.1 96 342.8 96 288C96 164.3 196.3 64 320 64zM407.5 196.3C404.9 189.3 395.1 189.3 392.5 196.3L374.1 246.1L324.3 264.5C317.3 267.1 317.3 276.9 324.3 279.5L374.1 297.9L392.5 347.7C395.1 354.7 404.9 354.7 407.5 347.7L425.9 297.9L475.7 279.5C482.7 276.9 482.7 267.1 475.7 264.5L425.9 246.1L407.5 196.3zM263.5 148.3C260.9 141.3 251.1 141.3 248.5 148.3L238.7 174.7L212.3 184.5C205.3 187.1 205.3 196.9 212.3 199.5L238.7 209.3L248.5 235.7C251.1 242.7 260.9 242.7 263.5 235.7L273.3 209.3L299.7 199.5C306.7 196.9 306.7 187.1 299.7 184.5L273.3 174.7L263.5 148.3z"/>
+              </svg>
               <span>4-Guess</span>
             </p>
           </>
