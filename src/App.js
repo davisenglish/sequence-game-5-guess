@@ -3460,11 +3460,11 @@ export default function WordPuzzleGame() {
                 type="button"
                 onClick={async () => {
                   const d = new Date();
-                  const mm = String(d.getMonth() + 1).padStart(2, '0');
-                  const dd = String(d.getDate()).padStart(2, '0');
-                  const yy = String(d.getFullYear()).slice(-2);
+                  const month = d.toLocaleDateString('en-US', { month: 'long' });
+                  const day = d.getDate();
+                  const year = d.getFullYear();
                   const score = localStorage.getItem('currentRoundScore_v2_4guess') || '0';
-                  const text = `Stringlish | 4-Guess 🔮, ${mm}/${dd}/${yy} - Total Score: ${score}. See if you can beat me at https://www.stringlish.com/`;
+                  const text = `Stringlish 🔮 4-Guess\nScore: ${score}\n${month} ${day}, ${year}\nSee if you can beat me at:\nhttps://stringlish.com/`;
                   if (typeof navigator.share === 'function') {
                     try {
                       await navigator.share({ text });
