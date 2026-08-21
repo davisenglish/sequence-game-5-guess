@@ -774,6 +774,8 @@ export default function WordPuzzleGame() {
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [guessesRemaining, setGuessesRemaining] = useState(GUESSES_PER_DAY);
+  const [animatingDotIdx, setAnimatingDotIdx] = useState(null);
+  const animatingDotTimerRef = useRef(null);
   const [gameOver, setGameOver] = useState(false);
   const [manuallyEnded, setManuallyEnded] = useState(false);
   const [score, setScore] = useState(0);
@@ -1353,6 +1355,9 @@ export default function WordPuzzleGame() {
       setError(true); 
       setErrorMessage(`Word must contain '${letters}' in order`); 
       setValidWords(prev => [...prev, { word, length: 'x', bonusTime: 0, isValid: false }]);
+      if (animatingDotTimerRef.current) clearTimeout(animatingDotTimerRef.current);
+      setAnimatingDotIdx(validWords.length);
+      animatingDotTimerRef.current = setTimeout(() => setAnimatingDotIdx(null), 400);
         setInput(''); inputValueRef.current = '';
       setGuessesRemaining(prev => prev - 1);
       return; 
@@ -1366,6 +1371,9 @@ export default function WordPuzzleGame() {
       setError(true); 
         setErrorMessage('Word not found in list');
       setValidWords(prev => [...prev, { word, length: 'x', bonusTime: 0, isValid: false }]);
+      if (animatingDotTimerRef.current) clearTimeout(animatingDotTimerRef.current);
+      setAnimatingDotIdx(validWords.length);
+      animatingDotTimerRef.current = setTimeout(() => setAnimatingDotIdx(null), 400);
         setInput(''); inputValueRef.current = '';
       setGuessesRemaining(prev => prev - 1);
       return; 
@@ -1373,6 +1381,9 @@ export default function WordPuzzleGame() {
 
     const baseScore = word.length;
       setValidWords(prev => [...prev, { word, length: word.length, bonusTime: 0, isValid: true }]);
+      if (animatingDotTimerRef.current) clearTimeout(animatingDotTimerRef.current);
+      setAnimatingDotIdx(validWords.length);
+      animatingDotTimerRef.current = setTimeout(() => setAnimatingDotIdx(null), 400);
       setScore(prev => prev + baseScore);
     setLetterPopup(`+${baseScore}`);
     setTimeout(() => setLetterPopup(null), 1500);
@@ -2431,7 +2442,7 @@ export default function WordPuzzleGame() {
                         return (
                           <div
                             key={idx}
-                            className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm font-bold ${isCurrentGuess ? 'current-guess-dot' : ''}`}
+                            className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm font-bold ${isCurrentGuess ? 'current-guess-dot' : ''} ${idx === animatingDotIdx ? 'guess-dot-pop' : ''}`}
                             style={{
                               backgroundColor: isEmpty ? (isCurrentGuess ? 'rgba(0,0,0,0.18)' : 'rgba(0,0,0,0.06)') : isCorrect ? 'rgba(28, 109, 42, 0.2)' : 'rgba(200, 95, 49, 0.2)',
                               border: `2px solid ${isEmpty ? (isCurrentGuess ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.12)') : isCorrect ? '#1c6d2a' : '#c85f31'}`,
@@ -3810,6 +3821,14 @@ export default function WordPuzzleGame() {
         }
         .current-guess-dot {
           animation: currentGuessFade 0.35s ease-out forwards;
+        }
+        @keyframes guessDotPop {
+          0%   { transform: scale(1); }
+          50%  { transform: scale(1.25); }
+          100% { transform: scale(1); }
+        }
+        .guess-dot-pop {
+          animation: guessDotPop 0.3s ease-in-out forwards;
         }
         @keyframes guessPopoverExpand {
           from {
