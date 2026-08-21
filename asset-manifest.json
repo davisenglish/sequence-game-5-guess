@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/4-guess/static/css/main.e9b7300b.css",
+    "main.js": "/4-guess/static/js/main.92182a82.js",
+    "static/js/453.96453769.chunk.js": "/4-guess/static/js/453.96453769.chunk.js",
+    "index.html": "/4-guess/index.html",
+    "main.e9b7300b.css.map": "/4-guess/static/css/main.e9b7300b.css.map",
+    "main.92182a82.js.map": "/4-guess/static/js/main.92182a82.js.map",
+    "453.96453769.chunk.js.map": "/4-guess/static/js/453.96453769.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e9b7300b.css",
+    "static/js/main.92182a82.js"
+  ]
+}
